@@ -1,0 +1,5 @@
+pyTelegramBotAPI
+SQLAlchemy
+psycopg2-binary
+alembic
+boto3

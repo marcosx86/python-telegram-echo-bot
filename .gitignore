@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environment
+venv/
+.venv/
+env/
+.env/
+
+# Environment & secrets
+.env
+*.env
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Local media uploads
+files/
+
+# IDE / editor
+.vscode/
+.idea/
+pyrightconfig.json
+*.suo
+*.user
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Alembic – keep migrations but ignore __pycache__ inside
+alembic/versions/__pycache__/

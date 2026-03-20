@@ -1,0 +1,10 @@
+venv/
+__pycache__/
+*.db
+*.pyc
+.git/
+test_*.py
+alembic/env.pyc
+CVS
+.gitignore
+.DS_Store
