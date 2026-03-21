@@ -48,6 +48,8 @@ def main():
     parser.add_argument("--bucket-region", help="S3/MinIO region.")
     parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], help="Set the logging level.")
     parser.add_argument("--storage-mode", default="local", choices=["local", "s3", "both"], help="Where to save files: local, s3, or both (default: local)")
+    parser.add_argument("--polling-timeout", type=int, default=20, help="Polling timeout (default: 20)")
+    parser.add_argument("--polling-interval", type=int, default=0, help="Polling interval (default: 0)")
     args = parser.parse_args()
 
     # Configure logging
@@ -78,6 +80,11 @@ def main():
     logger.debug(f"Bucket Secret Key: {bucket_secret_key}")
     bucket_region = args.bucket_region or os.environ.get("BUCKET_REGION", "us-east-1")
     logger.debug(f"Bucket Region: {bucket_region}")
+
+    # Polling parameters
+    polling_timeout = int(os.environ.get("POLLING_TIMEOUT", args.polling_timeout))
+    polling_interval = int(os.environ.get("POLLING_INTERVAL", args.polling_interval))
+    logger.debug(f"Polling Timeout: {polling_timeout}, Polling Interval: {polling_interval}")
 
     # 1. Validate Token
     if not token:
@@ -219,9 +226,9 @@ def main():
         logger.info(f"Message from {message.from_user.username}: {message.text}")
         logger.debug(f"Full message JSON: {json.dumps(msg_dict, indent=4, ensure_ascii=False)}")
 
-    logger.info("Bot is starting polling loop...")
+    logger.info(f"Bot is starting polling loop with timeout={polling_timeout} and interval={polling_interval}...")
     try:
-        bot.infinity_polling()
+        bot.infinity_polling(timeout=polling_timeout, interval=polling_interval)
     except Exception as e:
         logger.error(f"Critical error in polling loop: {e}")
 
