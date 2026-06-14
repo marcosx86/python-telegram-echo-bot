@@ -6,6 +6,8 @@ import telebot
 import hashlib
 import sys
 import tempfile
+import re
+import requests
 from telebot import types
 from database import DatabaseManager
 from storage import S3StorageManager
@@ -50,6 +52,7 @@ def main():
     parser.add_argument("--storage-mode", default="local", choices=["local", "s3", "both"], help="Where to save files: local, s3, or both (default: local)")
     parser.add_argument("--polling-timeout", type=int, default=20, help="Polling timeout (default: 20)")
     parser.add_argument("--polling-interval", type=int, default=0, help="Polling interval (default: 0)")
+    parser.add_argument("--xwitter-api", help="Xwitter API URL. Can also be set via XWITTER_API environment variable.")
     args = parser.parse_args()
 
     # Configure logging
@@ -85,6 +88,10 @@ def main():
     polling_timeout = int(os.environ.get("POLLING_TIMEOUT", args.polling_timeout))
     polling_interval = int(os.environ.get("POLLING_INTERVAL", args.polling_interval))
     logger.debug(f"Polling Timeout: {polling_timeout}, Polling Interval: {polling_interval}")
+
+    xwitter_api = args.xwitter_api or os.environ.get("XWITTER_API")
+    if xwitter_api:
+        logger.debug(f"Xwitter API URL configured: {xwitter_api}")
 
     # 1. Validate Token
     if not token:
@@ -225,6 +232,62 @@ def main():
         msg_dict = message.json
         logger.info(f"Message from {message.from_user.username}: {message.text}")
         logger.debug(f"Full message JSON: {json.dumps(msg_dict, indent=4, ensure_ascii=False)}")
+        logger.debug(f"echo_all processing check: message.text exists={bool(message.text)}, xwitter_api={xwitter_api}")
+        
+        if message.text and xwitter_api:
+            url_match = re.search(r'(https?://(?:www\.)?x\.com/[a-zA-Z0-9_]+/status/[0-9]+)', message.text)
+            logger.debug(f"URL match result: {url_match}")
+            if url_match:
+                target_url = url_match.group(1)
+                logger.info(f"Triggering X Media download for {target_url}")
+                try:
+                    bot.send_chat_action(message.chat.id, 'upload_video')
+                    response = requests.post(xwitter_api, json={"url": target_url}, stream=True)
+                    if response.status_code == 200:
+                        content_disposition = response.headers.get("Content-Disposition", "")
+                        filename = f"xwitter_{message.message_id}.mp4"
+                        if "filename=" in content_disposition:
+                            match = re.search(r'filename="?([^"]+)"?', content_disposition)
+                            if match:
+                                filename = match.group(1)
+                        
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
+                            for chunk in response.iter_content(chunk_size=16384):
+                                if chunk:
+                                    tmp.write(chunk)
+                            tmp_path = tmp.name
+                        
+                        if s3_storage_manager:
+                            s3_path = f"xwitter_media/permanent/{filename}"
+                            upload_url = s3_storage_manager.upload_file(tmp_path, s3_path)
+                            if upload_url:
+                                logger.info(f"X Media uploaded to S3: {upload_url}")
+                                bot.reply_to(message, "Media file downloaded and stored successfully")
+                            else:
+                                logger.error("Failed to upload to configured bucket")
+                                bot.reply_to(message, "Error: Failed to upload media file to bucket")
+                        else:
+                            bot.reply_to(message, "Error: Storage manager not configured for upload")
+                        
+                        try:
+                            os.remove(tmp_path)
+                        except Exception:
+                            pass
+                    else:
+                        logger.debug(f"Response status code: {response.status_code}")
+                        logger.debug(f"X Media API error text: {response.text}")
+                        err_msg = "Unknown error"
+                        try:
+                            err_data = response.json()
+                            if "error_message" in err_data:
+                                err_msg = err_data["error_message"]
+                        except Exception:
+                            pass
+                        logger.error(f"X Media API error: {response.status_code} - {err_msg}")
+                        bot.reply_to(message, err_msg)
+                except Exception as e:
+                    logger.error(f"Error calling Xwitter API: {e}", exc_info=True)
+                    bot.reply_to(message, f"Error processing X URL: {e}")
 
     logger.info(f"Bot is starting polling loop with timeout={polling_timeout} and interval={polling_interval}...")
     try:

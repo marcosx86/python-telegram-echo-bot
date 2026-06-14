@@ -14,6 +14,7 @@ A robust Python-based Telegram bot built with `pyTelegramBotAPI` that echoes inc
 - **Centralized Logging**: Configurable log levels (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) for all modules.
 - **Strict Validation**: Validates configuration at startup and fails fast with descriptive error messages.
 - **Maintenance Tooling**: A dedicated `maintenance.py` script handles background operations (S3 sync, deduplication sweep) without touching the main bot.
+- **Xwitter Media Integration**: Automatically detects X (Twitter) URLs in text messages, downloads the underlying video via a configured API, and stores it in the configured storage.
 
 ## Project Structure
 
@@ -59,6 +60,7 @@ Configure the bot using command-line arguments or environment variables. CLI arg
 | `--database-url` | `DATABASE_URL` | No | DB connection string. Defaults to `sqlite:///./bot_database.db`. |
 | `--storage-mode` | `STORAGE_MODE` | No | `local`, `s3`, or `both` (default: `local`). |
 | `--log-level` | N/A | No | Log verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` (default: `INFO`). |
+| `--xwitter-api` | `XWITTER_API` | No | Xwitter API endpoint URL to enable X URL downloading. |
 
 ### S3 / MinIO Settings
 
@@ -90,6 +92,12 @@ python echo_bot.py --token <YOUR_TOKEN> \
   --bucket-access-key <KEY> \
   --bucket-secret-key <SECRET> \
   --bucket-endpoint http://localhost:9000
+```
+
+With Xwitter integration enabled (requires a running Xwitter API instance):
+```bash
+python echo_bot.py --token <YOUR_TOKEN> \
+  --xwitter-api http://127.0.0.1:5000/download
 ```
 
 ### Via Docker
