@@ -14,7 +14,7 @@ A robust Python-based Telegram bot built with `pyTelegramBotAPI` that echoes inc
 - **Centralized Logging**: Configurable log levels (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) for all modules.
 - **Strict Validation**: Validates configuration at startup and fails fast with descriptive error messages.
 - **Maintenance Tooling**: A dedicated `maintenance.py` script handles background operations (S3 sync, deduplication sweep) without touching the main bot.
-- **Xwitter Media Integration**: Automatically detects X (Twitter) URLs in text messages, downloads the underlying video via a configured API, and stores it in the configured storage.
+- **X / Twitter Media Integration**: Automatically detects X (Twitter) URLs in text messages, downloads media (videos/photos) via a configured X-Bridge API (`--x-bridge-api`) or legacy Xwitter API (`--xwitter-api`), and stores it in the configured storage.
 
 ## Project Structure
 
@@ -60,7 +60,8 @@ Configure the bot using command-line arguments or environment variables. CLI arg
 | `--database-url` | `DATABASE_URL` | No | DB connection string. Defaults to `sqlite:///./bot_database.db`. |
 | `--storage-mode` | `STORAGE_MODE` | No | `local`, `s3`, or `both` (default: `local`). |
 | `--log-level` | N/A | No | Log verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` (default: `INFO`). |
-| `--xwitter-api` | `XWITTER_API` | No | Xwitter API endpoint URL to enable X URL downloading. |
+| `--xwitter-api` | `XWITTER_API` | No | Xwitter API endpoint URL to enable legacy X URL downloading (mutually exclusive with `--x-bridge-api`). |
+| `--x-bridge-api` | `X_BRIDGE_API` | No | X-Bridge API URL (e.g. `http://localhost:8000`) for X/Twitter media integration (mutually exclusive with `--xwitter-api`). Aliases: `--xbridge-api`, `--x-bridge`. |
 
 ### S3 / MinIO Settings
 
@@ -94,7 +95,13 @@ python echo_bot.py --token <YOUR_TOKEN> \
   --bucket-endpoint http://localhost:9000
 ```
 
-With Xwitter integration enabled (requires a running Xwitter API instance):
+With X-Bridge integration enabled (requires a running `python-x-bridge` instance):
+```bash
+python echo_bot.py --token <YOUR_TOKEN> \
+  --x-bridge-api http://127.0.0.1:8000
+```
+
+With legacy Xwitter integration enabled (mutually exclusive with `--x-bridge-api`):
 ```bash
 python echo_bot.py --token <YOUR_TOKEN> \
   --xwitter-api http://127.0.0.1:5000/download
