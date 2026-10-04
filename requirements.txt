@@ -1,5 +1,6 @@
 pyTelegramBotAPI
 SQLAlchemy
+psycopg[binary]
 psycopg2-binary
 alembic
 boto3

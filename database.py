@@ -28,6 +28,18 @@ def setup_database(database_url):
     if database_url and database_url.startswith("postgres://"):
         database_url = database_url.replace("postgres://", "postgresql://", 1)
     
+    # In SQLAlchemy 2.1+, 'postgresql://' defaults to psycopg (v3). If psycopg is not
+    # installed but psycopg2 is available, fallback to 'postgresql+psycopg2://'.
+    if database_url and database_url.startswith("postgresql://"):
+        try:
+            import psycopg  # noqa: F401
+        except ImportError:
+            try:
+                import psycopg2  # noqa: F401
+                database_url = database_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+            except ImportError:
+                pass
+    
     engine = create_engine(database_url)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     return engine, SessionLocal

@@ -1,4 +1,6 @@
 #!/bin/bash
+set -e
+
 # Apply database migrations
 echo -e "Applying database migrations...\n"
 alembic upgrade head

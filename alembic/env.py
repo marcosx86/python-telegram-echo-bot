@@ -19,6 +19,18 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./bot_database.db")
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
+# In SQLAlchemy 2.1+, 'postgresql://' defaults to psycopg (v3). If psycopg is not
+# installed but psycopg2 is available, fallback to 'postgresql+psycopg2://'.
+if DATABASE_URL and DATABASE_URL.startswith("postgresql://"):
+    try:
+        import psycopg  # noqa: F401
+    except ImportError:
+        try:
+            import psycopg2  # noqa: F401
+            DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
+        except ImportError:
+            pass
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
