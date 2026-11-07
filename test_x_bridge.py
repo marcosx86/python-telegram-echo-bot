@@ -181,3 +181,89 @@ def test_x_bridge_s3_storage():
 
         mock_s3.upload_file.assert_called_once()
         bot.reply_to.assert_called_with(message, "Media file downloaded and stored successfully")
+
+
+def test_xwitter_single_image():
+    bot = MagicMock()
+    message = MagicMock()
+    message.message_id = 201
+    message.chat.id = 12345
+    message.text = "Single image post https://x.com/user/status/11111"
+
+    mock_resp = MagicMock(status_code=200)
+    mock_resp.headers = {
+        "Content-Type": "application/octet-stream",
+        "Content-Disposition": 'attachment; filename="user_Check_out_this_photo.jpg"',
+    }
+    mock_resp.iter_content.return_value = [b"fake-image-data"]
+
+    with patch("requests.post", return_value=mock_resp):
+        handle_xwitter_media(
+            bot=bot,
+            message=message,
+            xwitter_api="http://localhost:5000/download",
+            storage_mode="local",
+            s3_storage_manager=None,
+        )
+
+    bot.reply_to.assert_called_with(message, "Media file downloaded and stored successfully")
+    expected_file = os.path.join(FILES_DIR, "xwitter_media", "user_Check_out_this_photo.jpg")
+    assert os.path.exists(expected_file)
+    with open(expected_file, "rb") as f:
+        assert f.read() == b"fake-image-data"
+    os.remove(expected_file)
+
+
+def test_xwitter_multiple_media_zip():
+    import io
+    import zipfile
+
+    bot = MagicMock()
+    message = MagicMock()
+    message.message_id = 202
+    message.chat.id = 12345
+    message.text = "Multi media post https://x.com/user/status/22222"
+
+    # Build an in-memory ZIP matching python-xwitter-download POST /download output
+    zip_buf = io.BytesIO()
+    with zipfile.ZipFile(zip_buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("user_Photo_and_video.json", '{"username": "user", "status_id": "22222"}')
+        zf.writestr("user_Photo_and_video_1.jpg", b"photo_1_bytes")
+        zf.writestr("user_Photo_and_video_2.mp4", b"video_2_bytes")
+    zip_bytes = zip_buf.getvalue()
+
+    mock_resp = MagicMock(status_code=200)
+    mock_resp.headers = {
+        "Content-Type": "application/zip",
+        "Content-Disposition": 'attachment; filename="user_Photo_and_video.zip"',
+    }
+    mock_resp.iter_content.return_value = [zip_bytes]
+
+    mock_s3 = MagicMock()
+    mock_s3.upload_file.side_effect = lambda src, key: f"https://s3.example.com/{key}"
+
+    with patch("requests.post", return_value=mock_resp):
+        handle_xwitter_media(
+            bot=bot,
+            message=message,
+            xwitter_api="http://localhost:5000/download",
+            storage_mode="both",
+            s3_storage_manager=mock_s3,
+        )
+
+    bot.reply_to.assert_called_with(message, "Media file downloaded and stored successfully")
+
+    expected_names = [
+        "user_Photo_and_video.json",
+        "user_Photo_and_video_1.jpg",
+        "user_Photo_and_video_2.mp4",
+    ]
+    for name in expected_names:
+        local_file = os.path.join(FILES_DIR, "xwitter_media", name)
+        assert os.path.exists(local_file), f"Expected extracted file {local_file} to exist"
+        os.remove(local_file)
+
+    uploaded_keys = [call.args[1] for call in mock_s3.upload_file.call_args_list]
+    for name in expected_names:
+        assert f"xwitter_media/permanent/{name}" in uploaded_keys
+

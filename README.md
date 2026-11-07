@@ -60,7 +60,7 @@ Configure the bot using command-line arguments or environment variables. CLI arg
 | `--database-url` | `DATABASE_URL` | No | DB connection string. Defaults to `sqlite:///./bot_database.db`. |
 | `--storage-mode` | `STORAGE_MODE` | No | `local`, `s3`, or `both` (default: `local`). |
 | `--log-level` | N/A | No | Log verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` (default: `INFO`). |
-| `--xwitter-api` | `XWITTER_API` | No | Xwitter API endpoint URL to enable legacy X URL downloading (mutually exclusive with `--x-bridge-api`). |
+| `--xwitter-api` | `XWITTER_API` | No | Xwitter API endpoint URL (`POST /download`) to enable X URL downloading of videos, images, and multi-media ZIP bundles (mutually exclusive with `--x-bridge-api`). |
 | `--x-bridge-api` | `X_BRIDGE_API` | No | X-Bridge API URL (e.g. `http://localhost:8000`) for X/Twitter media integration (mutually exclusive with `--xwitter-api`). Aliases: `--xbridge-api`, `--x-bridge`. |
 
 ### S3 / MinIO Settings

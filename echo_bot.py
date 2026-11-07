@@ -9,6 +9,7 @@ import tempfile
 import re
 import requests
 import shutil
+import zipfile
 from telebot import types
 from database import DatabaseManager
 from storage import S3StorageManager
@@ -57,9 +58,44 @@ def build_parser():
     return parser
 
 
+def _store_xwitter_file(tmp_path, filename, storage_mode, s3_storage_manager):
+    """Stores a single downloaded file locally and/or to S3 according to storage_mode."""
+    stored = False
+    if storage_mode in ['local', 'both']:
+        local_dir = os.path.join(FILES_DIR, "xwitter_media")
+        os.makedirs(local_dir, exist_ok=True)
+        local_path = os.path.join(local_dir, filename)
+        shutil.copyfile(tmp_path, local_path)
+        logger.info(f"X Media saved locally to: {local_path}")
+        stored = True
+
+    if storage_mode in ['s3', 'both']:
+        if s3_storage_manager:
+            s3_path = f"xwitter_media/permanent/{filename}"
+            upload_url = s3_storage_manager.upload_file(tmp_path, s3_path)
+            if upload_url:
+                logger.info(f"X Media uploaded to S3: {upload_url}")
+                stored = True
+            else:
+                logger.error("Failed to upload to configured bucket")
+        else:
+            logger.error("Storage manager not configured for S3 upload")
+
+    return stored
+
+
 def handle_xwitter_media(bot, message, xwitter_api, storage_mode, s3_storage_manager):
-    """Handler for Xwitter API media downloads."""
-    url_match = re.search(r'(https?://(?:www\.)?x\.com/[a-zA-Z0-9_]+/status/[0-9]+)', message.text)
+    """
+    Handler for Xwitter API media downloads (POST /download).
+    Supports:
+    - Single video or image stream (application/octet-stream)
+    - Multi-media tweets bundled as a ZIP archive (application/zip), unzipping and saving each file separately
+    """
+    url_match = re.search(
+        r'(https?://(?:www\.)?(?:x|twitter|fixupx|fxtwitter)\.com/[a-zA-Z0-9_]+/status/[0-9]+)',
+        message.text,
+        re.IGNORECASE,
+    )
     logger.debug(f"URL match result: {url_match}")
     if not url_match:
         return
@@ -70,45 +106,64 @@ def handle_xwitter_media(bot, message, xwitter_api, storage_mode, s3_storage_man
         bot.send_chat_action(message.chat.id, 'upload_video')
         response = requests.post(xwitter_api, json={"url": target_url}, stream=True)
         if response.status_code == 200:
-            content_disposition = response.headers.get("Content-Disposition", "")
+            headers = response.headers or {}
+            content_disposition = headers.get("Content-Disposition", "")
+            content_type = headers.get("Content-Type", "")
             filename = f"xwitter_{message.message_id}.mp4"
             if "filename=" in content_disposition:
                 match = re.search(r'filename="?([^"]+)"?', content_disposition)
                 if match:
                     filename = match.group(1)
 
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
+            ext = os.path.splitext(filename)[1]
+            if not ext:
+                ext = ".zip" if "application/zip" in content_type.lower() else ".mp4"
+                filename = f"{filename}{ext}"
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
                 for chunk in response.iter_content(chunk_size=16384):
                     if chunk:
                         tmp.write(chunk)
                 tmp_path = tmp.name
 
             try:
-                stored = False
-                if storage_mode in ['local', 'both']:
-                    local_dir = os.path.join(FILES_DIR, "xwitter_media")
-                    os.makedirs(local_dir, exist_ok=True)
-                    local_path = os.path.join(local_dir, filename)
-                    shutil.copyfile(tmp_path, local_path)
-                    logger.info(f"X Media saved locally to: {local_path}")
-                    stored = True
+                is_zip = (
+                    "application/zip" in content_type.lower()
+                    or filename.lower().endswith(".zip")
+                    or zipfile.is_zipfile(tmp_path)
+                )
+                if is_zip:
+                    logger.info(f"Unzipping multi-media archive '{filename}' and saving files separately")
+                    stored_count = 0
+                    with zipfile.ZipFile(tmp_path, "r") as zf:
+                        for member_info in zf.infolist():
+                            if member_info.is_dir():
+                                continue
+                            member_filename = os.path.basename(member_info.filename)
+                            if not member_filename:
+                                continue
+                            member_ext = os.path.splitext(member_filename)[1] or ".bin"
+                            with zf.open(member_info) as src_stream, tempfile.NamedTemporaryFile(delete=False, suffix=member_ext) as member_tmp:
+                                shutil.copyfileobj(src_stream, member_tmp)
+                                member_tmp_path = member_tmp.name
 
-                if storage_mode in ['s3', 'both']:
-                    if s3_storage_manager:
-                        s3_path = f"xwitter_media/permanent/{filename}"
-                        upload_url = s3_storage_manager.upload_file(tmp_path, s3_path)
-                        if upload_url:
-                            logger.info(f"X Media uploaded to S3: {upload_url}")
-                            stored = True
-                        else:
-                            logger.error("Failed to upload to configured bucket")
+                            try:
+                                if _store_xwitter_file(member_tmp_path, member_filename, storage_mode, s3_storage_manager):
+                                    stored_count += 1
+                            finally:
+                                if os.path.exists(member_tmp_path):
+                                    os.remove(member_tmp_path)
+
+                    if stored_count > 0:
+                        bot.reply_to(message, "Media file downloaded and stored successfully")
                     else:
-                        logger.error("Storage manager not configured for S3 upload")
-
-                if stored:
-                    bot.reply_to(message, "Media file downloaded and stored successfully")
+                        bot.reply_to(message, "Error: Storage manager not configured for upload")
                 else:
-                    bot.reply_to(message, "Error: Storage manager not configured for upload")
+                    stored = _store_xwitter_file(tmp_path, filename, storage_mode, s3_storage_manager)
+                    if stored:
+                        bot.reply_to(message, "Media file downloaded and stored successfully")
+                    else:
+                        bot.reply_to(message, "Error: Storage manager not configured for upload")
             finally:
                 if os.path.exists(tmp_path):
                     os.remove(tmp_path)
