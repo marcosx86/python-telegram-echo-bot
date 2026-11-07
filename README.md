@@ -107,12 +107,20 @@ python echo_bot.py --token <YOUR_TOKEN> \
   --xwitter-api http://127.0.0.1:5000/download
 ```
 
-### Via Docker
+### Via Docker & Docker Compose
 
-The provided `Dockerfile` and `start.sh` handle migrations and startup automatically:
+The provided `Dockerfile`, `docker-compose.yml`, and `start.sh` handle migrations and startup automatically:
+
+**Using Docker Compose:**
+```bash
+TELEGRAM_BOT_TOKEN=<YOUR_TOKEN> docker compose up --build
+```
+
+**Using Docker:**
 ```bash
 docker build -t my-echo-bot .
 docker run \
+  -p 8000:8000 \
   -e TELEGRAM_BOT_TOKEN=<YOUR_TOKEN> \
   -e STORAGE_MODE=s3 \
   -e BUCKET_NAME=my-bucket \

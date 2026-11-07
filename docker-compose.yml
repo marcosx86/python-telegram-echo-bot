@@ -1,0 +1,21 @@
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///./bot_database.db}
+      - STORAGE_MODE=${STORAGE_MODE:-local}
+      - BUCKET_ENDPOINT=${BUCKET_ENDPOINT:-}
+      - BUCKET_ACCESS_KEY=${BUCKET_ACCESS_KEY:-}
+      - BUCKET_SECRET_KEY=${BUCKET_SECRET_KEY:-}
+      - BUCKET_NAME=${BUCKET_NAME:-}
+      - BUCKET_REGION=${BUCKET_REGION:-us-east-1}
+      - XWITTER_API=${XWITTER_API:-}
+      - X_BRIDGE_API=${X_BRIDGE_API:-}
+    volumes:
+      - .:/app
